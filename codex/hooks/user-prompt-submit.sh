@@ -23,7 +23,13 @@ script_dir=$(cd "$(dirname "$0")" && pwd) || script_dir=.
 PLAN_GOAL_CHECKER="${PLAN_GOAL_CHECKER:-$script_dir/../bin/goal-block-check}"
 export PLAN_GOAL_CHECKER
 
-cat <<'PY' | python3 - "$script_dir"
+# The program goes through a temporary file, not "python3 -", so stdin stays
+# attached to the hook event JSON.
+tmp=$(mktemp "${TMPDIR:-/tmp}/plan-goal-prompt.XXXXXX") || exit 0
+trap 'rm -f "$tmp"' EXIT
+trap 'rm -f "$tmp"; exit 0' INT TERM
+
+cat >"$tmp" <<'PY'
 import json
 import os
 import re
@@ -86,4 +92,6 @@ print(json.dumps({
     }
 }))
 PY
+
+python3 "$tmp" "$script_dir"
 exit $?

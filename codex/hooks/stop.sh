@@ -26,7 +26,13 @@ script_dir=$(cd "$(dirname "$0")" && pwd) || script_dir=.
 PLAN_GOAL_CHECKER="${PLAN_GOAL_CHECKER:-$script_dir/../bin/goal-block-check}"
 export PLAN_GOAL_CHECKER
 
-cat <<'PY' | python3 - "$script_dir"
+# The program goes through a temporary file, not "python3 -", so stdin stays
+# attached to the hook event JSON.
+tmp=$(mktemp "${TMPDIR:-/tmp}/plan-goal-stop.XXXXXX") || exit 0
+trap 'rm -f "$tmp"' EXIT
+trap 'rm -f "$tmp"; exit 0' INT TERM
+
+cat >"$tmp" <<'PY'
 import json
 import os
 import subprocess
@@ -106,10 +112,11 @@ else:
     problems = "no goal file at " + goal_path
 
 if valid:
-    try:
-        os.remove(flag_path)
-    except OSError:
-        pass
+    for path in (flag_path, counter_path):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
     block = goal_block_text(goal_path) or ""
     emit({"systemMessage": "Paste to set the goal:\n/goal " + block})
     raise SystemExit(0)
@@ -142,4 +149,6 @@ reason = (
 emit({"decision": "block", "reason": reason})
 raise SystemExit(0)
 PY
+
+python3 "$tmp" "$script_dir"
 exit $?
