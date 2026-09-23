@@ -13,3 +13,7 @@
 | U3 Codex | GLM | FAIL (partial) | coordinator ran codex/uat.sh: 5 cases FAIL (b–e), f–h PASS; script exits 0 despite failures (defect) | partial files kept for the rerun |
 | U1 pi bridge | Claude agent | INTERRUPTED | — | src/gate.ts, goal-block.ts, signal.ts written; no package.json/tests yet |
 | U0b CC probe | Claude agent | INTERRUPTED | probe.md absent | sandbox evidence kept in claude-code/probe-sandbox/ |
+| resume | — | — | curl api.anthropic.com 404, api.z.ai 301 | DNS recovered; U0b, U1 redispatched to Claude agents from partial files, U3 rerun on GLM |
+| lane check | Codex | OPEN | `codex exec -m gpt-5.6-luna -c model_reasoning_effort=xhigh` → OK | Gary: "Codex is back use Luna 6 at extra high". gpt-6-luna → "not supported when using Codex with a ChatGPT account"; used gpt-5.6-luna |
+| fork | — | decided forward | — | U2 GLM → Codex Luna xhigh; U5 Claude agent → Codex Luna xhigh (≠ U1 author lane); U4 → oMLX Qwen3.8-Flash, 1 stream (Gary offered) |
+| U0b CC probe | Claude agent (sonnet), rerun | PASS | coordinator: APPROVE/REJECT/STOP present; filePath and stop_hook_active recorded | reject fires no PostToolUse; both Stop block forms work |
