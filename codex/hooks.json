@@ -1,6 +1,19 @@
 {
   "description": "plan-goal: when the user approves a plan, make the model write a validated goal block and hand the user a /goal line at Stop.",
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^(Bash|apply_patch|Edit|Write)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "__PLAN_GOAL_DIR__/hooks/pre-tool-use.sh",
+            "statusMessage": "Checking the plan goal before the tool runs",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "hooks": [

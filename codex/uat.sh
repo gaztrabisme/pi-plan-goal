@@ -17,6 +17,15 @@
 #   f  SKILL.md has name: and description: frontmatter
 #   g  codex/bin/goal-block-check is byte-identical to bin/goal-block-check
 #   h  install.sh --dry-run with PREFIX into a temp dir exits 0
+#   i  PreToolUse gate, approved + no/invalid goal: apply_patch outside
+#      .plan-goal, `printf x > f`, and `find . -delete` denied; `ls`, a
+#      patch inside .plan-goal, and a .plan-goal-only command allowed; a
+#      mutating call with no approval flag allowed; missing python3 + flag
+#      fails closed with exit 2
+#   j  PreToolUse gate with a valid goal: the same apply_patch edit and a
+#      mutating command allowed silently
+#   k  install.sh with a space and a single quote in PREFIX: generated
+#      hooks.json parses and the Stop command string runs via sh -c
 
 set -u
 
@@ -241,6 +250,152 @@ case_h() {
 	fi
 }
 
+case_i() {
+	i="$work/i-gate"
+	mkdir -p "$i/.plan-goal"
+	: >"$i/.plan-goal/approved"
+
+	# apply_patch editing a file outside .plan-goal
+	cat >"$work/i-patch-out.json" <<EOF
+{"hook_event_name":"PreToolUse","cwd":"$i","tool_name":"apply_patch","tool_input":{"command":"*** Begin Patch\n*** Add File: edited.txt\n+edited before goal\n*** End Patch"}}
+EOF
+	# a shell redirect outside .plan-goal
+	cat >"$work/i-redirect.json" <<EOF
+{"hook_event_name":"PreToolUse","cwd":"$i","tool_name":"Bash","tool_input":{"command":"printf x > f"}}
+EOF
+	# a mutating find
+	cat >"$work/i-find.json" <<EOF
+{"hook_event_name":"PreToolUse","cwd":"$i","tool_name":"Bash","tool_input":{"command":"find . -delete"}}
+EOF
+	# a read-only command
+	cat >"$work/i-ls.json" <<EOF
+{"hook_event_name":"PreToolUse","cwd":"$i","tool_name":"Bash","tool_input":{"command":"ls"}}
+EOF
+	# apply_patch touching only .plan-goal/
+	cat >"$work/i-patch-in.json" <<EOF
+{"hook_event_name":"PreToolUse","cwd":"$i","tool_name":"apply_patch","tool_input":{"command":"*** Begin Patch\n*** Add File: .plan-goal/goal.md\n+Execute plan \"x\" (p). Goal rows:\n+1 check: test -f x\n*** End Patch"}}
+EOF
+	# a command writing only inside .plan-goal/
+	cat >"$work/i-cmd-in.json" <<EOF
+{"hook_event_name":"PreToolUse","cwd":"$i","tool_name":"Bash","tool_input":{"command":"printf x > .plan-goal/draft.md"}}
+EOF
+	# a mutating command with no approval flag in cwd
+	mkdir -p "$work/i-noflag"
+	cat >"$work/i-noflag.json" <<EOF
+{"hook_event_name":"PreToolUse","cwd":"$work/i-noflag","tool_name":"Bash","tool_input":{"command":"printf x > f"}}
+EOF
+
+	"$here/hooks/pre-tool-use.sh" <"$work/i-patch-out.json" >"$work/i-patch-out.out"
+	i1=$?
+	"$here/hooks/pre-tool-use.sh" <"$work/i-redirect.json" >"$work/i-redirect.out"
+	i2=$?
+	"$here/hooks/pre-tool-use.sh" <"$work/i-find.json" >"$work/i-find.out"
+	i3=$?
+	"$here/hooks/pre-tool-use.sh" <"$work/i-ls.json" >"$work/i-ls.out"
+	i4=$?
+	"$here/hooks/pre-tool-use.sh" <"$work/i-patch-in.json" >"$work/i-patch-in.out"
+	i5=$?
+	"$here/hooks/pre-tool-use.sh" <"$work/i-cmd-in.json" >"$work/i-cmd-in.out"
+	i6=$?
+	"$here/hooks/pre-tool-use.sh" <"$work/i-noflag.json" >"$work/i-noflag.out"
+	i7=$?
+	# missing python3 with a pending approval must fail closed: exit 2
+	mkdir -p "$work/i-emptybin"
+	i8=$(cd "$i" && PATH="$work/i-emptybin" /bin/sh "$here/hooks/pre-tool-use.sh" \
+		<"$work/i-ls.json" >"$work/i-nopy.out" 2>"$work/i-nopy.err"; echo $?)
+
+	errs=""
+	ck 'apply_patch outside .plan-goal exits 0' test "$i1" -eq 0
+	ck 'apply_patch outside .plan-goal is denied' \
+		expect_json "$work/i-patch-out.out" \
+		'obj["hookSpecificOutput"]["permissionDecision"] == "deny"'
+	ck 'apply_patch deny reason names the goal file' \
+		expect_json "$work/i-patch-out.out" \
+		'".plan-goal/goal.md" in obj["hookSpecificOutput"]["permissionDecisionReason"] and obj["hookSpecificOutput"]["hookEventName"] == "PreToolUse"'
+	ck 'redirect outside .plan-goal is denied' \
+		expect_json "$work/i-redirect.out" \
+		'obj["hookSpecificOutput"]["permissionDecision"] == "deny"'
+	ck 'find -delete is denied' \
+		expect_json "$work/i-find.out" \
+		'obj["hookSpecificOutput"]["permissionDecision"] == "deny"'
+	ck 'ls exits 0' test "$i4" -eq 0
+	ck 'ls is allowed silently' test ! -s "$work/i-ls.out"
+	ck 'apply_patch inside .plan-goal exits 0' test "$i5" -eq 0
+	ck 'apply_patch inside .plan-goal is allowed silently' test ! -s "$work/i-patch-in.out"
+	ck 'plan-goal-only command exits 0' test "$i6" -eq 0
+	ck 'plan-goal-only command is allowed silently' test ! -s "$work/i-cmd-in.out"
+	ck 'no approval flag allows everything silently' \
+		sh -c 'test "$1" -eq 0 && test ! -s "$2"' sh "$i7" "$work/i-noflag.out"
+	ck 'missing python3 with a flag fails closed (exit 2)' test "$i8" -eq 2
+	ck 'missing python3 leaves a stderr reason' test -s "$work/i-nopy.err"
+	if [ -z "$errs" ]; then
+		pass 'i PreToolUse gate with no valid goal'
+	else
+		fail 'i PreToolUse gate with no valid goal' "$errs"
+	fi
+}
+
+case_j() {
+	j="$work/j-valid"
+	mkdir -p "$j/.plan-goal"
+	: >"$j/.plan-goal/approved"
+	cp "$repo/spec/example.md" "$j/.plan-goal/goal.md"
+	cat >"$work/j-patch.json" <<EOF
+{"hook_event_name":"PreToolUse","cwd":"$j","tool_name":"apply_patch","tool_input":{"command":"*** Begin Patch\n*** Add File: edited.txt\n+edited before goal\n*** End Patch"}}
+EOF
+	cat >"$work/j-redirect.json" <<EOF
+{"hook_event_name":"PreToolUse","cwd":"$j","tool_name":"Bash","tool_input":{"command":"printf x > f"}}
+EOF
+	"$here/hooks/pre-tool-use.sh" <"$work/j-patch.json" >"$work/j-patch.out"
+	j1=$?
+	"$here/hooks/pre-tool-use.sh" <"$work/j-redirect.json" >"$work/j-redirect.out"
+	j2=$?
+
+	errs=""
+	ck 'same apply_patch edit exits 0 with a valid goal' test "$j1" -eq 0
+	ck 'same apply_patch edit is allowed silently' test ! -s "$work/j-patch.out"
+	ck 'mutating command is allowed silently' \
+		sh -c 'test "$1" -eq 0 && test ! -s "$2"' sh "$j2" "$work/j-redirect.out"
+	if [ -z "$errs" ]; then
+		pass 'j PreToolUse gate with a valid goal'
+	else
+		fail 'j PreToolUse gate with a valid goal' "$errs"
+	fi
+}
+
+case_k() {
+	k="$work/k prefix's dir"
+	mkdir -p "$k" "$work/k-stop-fixture/.plan-goal"
+	: >"$work/k-stop-fixture/.plan-goal/approved"
+	cp "$repo/spec/example.md" "$work/k-stop-fixture/.plan-goal/goal.md"
+	PREFIX="$k" "$here/install.sh" >"$work/k.out" 2>&1
+	k1=$?
+	kj="$k/plan-goal/hooks.json"
+	kcmd=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["hooks"]["Stop"][0]["hooks"][0]["command"])' "$kj" 2>/dev/null)
+	printf '{"hook_event_name":"Stop","stop_hook_active":false,"cwd":"%s"}\n' \
+		"$work/k-stop-fixture" >"$work/k-stop.json"
+	sh -c "$kcmd" <"$work/k-stop.json" >"$work/k-stop.out" 2>"$work/k-stop.err"
+	k2=$?
+
+	errs=""
+	ck 'install exits 0 with a space and a quote in PREFIX' test "$k1" -eq 0
+	ck 'hooks.json exists in the package destination' test -f "$kj"
+	ck 'hooks.json parses' \
+		expect_json "$kj" 'obj["hooks"]["Stop"][0]["hooks"][0]["command"]'
+	ck 'hooks.json registers PreToolUse' \
+		expect_json "$kj" '"pre-tool-use.sh" in obj["hooks"]["PreToolUse"][0]["hooks"][0]["command"]'
+	ck 'Stop command string runs via sh -c' test "$k2" -eq 0
+	ck 'Stop command actually ran the hook' test -s "$work/k-stop.out"
+	ck 'Stop command emitted the /goal systemMessage' \
+		expect_json "$work/k-stop.out" '"/goal Execute plan" in obj.get("systemMessage", "")'
+	ck 'install printed the merge instructions' grep -q 'hooks\.json' "$work/k.out"
+	if [ -z "$errs" ]; then
+		pass 'k install.sh with spaces and quotes in PREFIX'
+	else
+		fail 'k install.sh with spaces and quotes in PREFIX' "$errs"
+	fi
+}
+
 cd "$work" || exit 2
 case_a
 case_bc
@@ -249,6 +404,9 @@ case_e
 case_f
 case_g
 case_h
+case_i
+case_j
+case_k
 
 printf '\n'
 if [ "$fails" -eq 0 ]; then
