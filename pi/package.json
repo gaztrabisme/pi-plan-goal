@@ -1,0 +1,24 @@
+{
+  "name": "pi-plan-goal",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "keywords": ["pi-package"],
+  "pi": {
+    "extensions": ["./src/index.ts"]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-ai": "*",
+    "typebox": "*",
+    "@narumitw/pi-plan-mode": "^0.58.3",
+    "@narumitw/pi-goal": "^0.54.8"
+  },
+  "peerDependenciesMeta": {
+    "@narumitw/pi-plan-mode": { "optional": true },
+    "@narumitw/pi-goal": { "optional": true }
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}

@@ -12,3 +12,5 @@
 | D8 | Lane repair | Wrapper at agent-capabilities/bin/subagent-mcp sourcing subagent.env (done 2026-09-22, verified) | Upgrading to the TOML build |
 | D9 | Codex credit | Try Spark first, reroute on first refusal | — |
 | D10 | Packaging | `git init`, commit per wave, no remote | Pushing to GitHub |
+| D11 | write_goal schema cap (U1, forced by measurement) | TypeBox maxLength 16000 as a ceiling; the 4000 rule enforced in execute() so the model sees "too long: 4001/4000 characters" | maxLength 4000 in schema: pi rejects before execute() with a generic message |
+| D12 | When the pi bridge arms (U1, forced by measurement) | input handler returns a transform appending the write_goal instruction; arm entry written at next turn_start | sendMessage/appendEntry inside the input handler: crashes turn_end ("could not resolve the persisted assistant entry ID") |
