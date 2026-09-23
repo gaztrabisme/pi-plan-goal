@@ -64,8 +64,8 @@ your `settings.json` yourself, replacing `${CLAUDE_PLUGIN_ROOT}` with the
 absolute path to `claude-code/`.
 
 Behavior: `PostToolUse` on `ExitPlanMode` drops an approval flag and tells
-the model to write `.claude/plan-goal/goal.md`; `PreToolUse` denies any edit
-until a validated goal file exists; the `Stop` hook validates the block and
+the model to write `.claude/plan-goal/goal.md`; `PreToolUse` denies edits and any
+non-read-only Bash command until a validated goal file exists; the `Stop` hook validates the block and
 prints `Paste to set the goal:` followed by a `/goal ...` line for you to
 paste. Environment variables:
 
@@ -89,13 +89,13 @@ It copies `bin/`, `hooks/`, `hooks.json` and `skill/` into
 `$PREFIX/plan-goal` and prints what you must do by hand, because Codex
 refuses unreviewed hooks:
 
-1. Merge the printed `hooks.json` entries (a `UserPromptSubmit` hook and a
-   `Stop` hook) into `~/.codex/hooks.json`, keeping what is already there.
+1. Merge the printed `hooks.json` entries (`UserPromptSubmit`, `PreToolUse` and
+   `Stop` hooks) into `~/.codex/hooks.json`, keeping what is already there.
    The installed copy at `$PREFIX/plan-goal/hooks.json` already has real
    absolute paths, so you can merge it verbatim.
 2. Copy the skill: `mkdir -p ~/.codex/skills/plan-goal && cp
    $PREFIX/plan-goal/skill/SKILL.md ~/.codex/skills/plan-goal/SKILL.md`
-3. Start Codex and run `/hooks` to review and trust both hooks. Re-trust
+3. Start Codex and run `/hooks` to review and trust the three hooks. Re-trust
    after any edit to the scripts.
 
 Behavior: Codex has no plan-exit tool, so approval is conversational. The
