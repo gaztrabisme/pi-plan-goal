@@ -67,3 +67,59 @@ test("isMutatingBash: redirection is always mutating even mid-segment", () => {
 test("isMutatingBash: command substitution is treated as mutating (can't verify statically)", () => {
   assert.equal(isMutatingBash("echo $(git status)"), true);
 });
+
+test("isMutatingBash: newline-separated read-only commands pass", () => {
+  assert.equal(isMutatingBash("git status\ngit log -1\ncat file.txt"), false);
+});
+
+test("isMutatingBash: a lone trailing newline doesn't block an otherwise read-only command", () => {
+  assert.equal(isMutatingBash("cat file.txt\n"), false);
+});
+
+// H1 (research/review.md): the allowlist accepted mutating find/git diff
+// options and didn't split on newlines, so an armed agent could edit files
+// before writing a goal. Each case below is a bypass from that finding.
+test("isMutatingBash: H1 bypasses are all blocked", () => {
+  for (const command of [
+    // find options that mutate or run further commands
+    "find . -type f -delete",
+    "find . -name '*.txt' -exec rm {} \\;",
+    "find . -name '*.txt' -execdir rm {} \\;",
+    "find . -name '*.txt' -ok rm {} \\;",
+    "find . -name '*.txt' -okdir rm {} \\;",
+    "find . -fprint out.txt",
+    "find . -fprint0 out.txt",
+    "find . -fprintf out.txt '%p\\n'",
+    "find . -fls out.txt",
+    // git diff options that write files or shell out
+    "git diff --output=out.txt",
+    "git diff --output out.txt",
+    "git diff --ext-diff",
+    "git diff --textconv",
+    // git global flags that change what git runs
+    "git -c core.pager=cat log",
+    "git --exec-path=/tmp/evil log",
+    "git log --exec-path=/tmp/evil",
+    // newline used to smuggle a second, unparsed statement
+    "cat /dev/null\nrm -f marker",
+    "git status\nrm -rf /tmp/x",
+    // redirection variants
+    "cat a.txt <> out.txt",
+    "cat a.txt | tee out.txt",
+    // process/command substitution
+    "cat <(rm -rf /tmp/x)",
+    "cat `rm -rf /tmp/x`",
+    // shells, wrappers, and privilege/backgrounding tools that can run
+    // arbitrary further commands
+    "env rm -rf /tmp/x",
+    "xargs rm -rf /tmp/x",
+    "find . -type f | xargs rm",
+    "sh -c 'rm -rf /tmp/x'",
+    "bash -c 'rm -rf /tmp/x'",
+    "nohup rm -rf /tmp/x",
+    "sudo rm -rf /tmp/x",
+  ]) {
+    const decision = gateToolCall("bash", { command });
+    assert.equal(decision.block, true, `expected "${command}" to be blocked`);
+  }
+});
