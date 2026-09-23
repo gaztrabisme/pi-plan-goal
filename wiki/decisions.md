@@ -1,0 +1,14 @@
+# Decisions — 2026-09-22 Plan Block
+
+| # | Decision | Chosen | Rejected |
+|---|---|---|---|
+| D1 | Which pi | TypeScript pi 0.87.0 (`@earendil-works/pi-coding-agent`) | pi_agent_rust / efficient-pi: no goal primitive, different API; follow-up |
+| D2 | Plan package | `@narumitw/pi-plan-mode` (tool-based approval, fail-closed edit gate, workflow mutex with pi-goal) | bundled plan-mode example (regex over prose); `@janvitos/pi-plan-build` (~1.9k tokens); plannotator (browser UI) |
+| D3 | Goal package | `@narumitw/pi-goal` (4,000 cap, goal_blocked/goal_wait/goal_complete, 25-turn guard) | `pi-codex-goal` (8,000 cap, ~130 tokens cheaper; fallback); Michaelliv pi-goal (stale); pi-goal-x, pi-supervisor (heavier) |
+| D4 | Who writes the goal | The agent, via `write_goal`, with edits blocked until it does | Bridge pre-fills from the plan |
+| D5 | Goal block shape | Gary's format: header line naming plan + file, then numbered rows each with a check; validated by `bin/goal-block-check` | Free text |
+| D6 | Claude Code ending | Stop hook prints the `/goal` line for the user to paste; opt-in self-loop `PLAN_GOAL_LOOP=1` capped at 8 | Hook-driven `/goal` (impossible: hooks cannot run slash commands) |
+| D7 | Scope of "other" | Build pi, Claude Code, Codex; document Gemini, Copilot, Cursor, opencode, Oh My Pi | Building all seven |
+| D8 | Lane repair | Wrapper at agent-capabilities/bin/subagent-mcp sourcing subagent.env (done 2026-09-22, verified) | Upgrading to the TOML build |
+| D9 | Codex credit | Try Spark first, reroute on first refusal | — |
+| D10 | Packaging | `git init`, commit per wave, no remote | Pushing to GitHub |
