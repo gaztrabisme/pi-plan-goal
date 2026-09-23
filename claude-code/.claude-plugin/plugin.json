@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "plan-goal",
+  "displayName": "Plan to Goal",
+  "version": "0.1.0",
+  "description": "Require a validated goal block after an approved Claude Code plan.",
+  "author": {
+    "name": "pi-plan-goal"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "pi-plan-goal",
+  "owner": {
+    "name": "pi-plan-goal"
+  },
+  "description": "Local plugins for plan approval and goal enforcement.",
+  "plugins": [
+    {
+      "name": "plan-goal",
+      "source": "./",
+      "description": "Require a validated goal block after an approved Claude Code plan.",
+      "version": "0.1.0"
+    }
+  ]
+}
