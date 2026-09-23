@@ -1,0 +1,132 @@
+#!/bin/sh
+# goal-block-check — validate a goal block against spec/goal-block.md.
+#
+# Usage: goal-block-check [FILE]
+#   FILE omitted or "-" reads stdin.
+#
+# Exit 0: the goal block is valid.
+# Exit 1: invalid; one problem per line on stderr.
+# Exit 2: usage error (bad arguments, unreadable file).
+
+set -u
+
+if [ "$#" -gt 1 ]; then
+	printf 'usage: goal-block-check [FILE]\n' >&2
+	exit 2
+fi
+
+tmp=$(mktemp "${TMPDIR:-/tmp}/goal-block-check.XXXXXX") || {
+	printf 'goal-block-check: cannot create temporary file\n' >&2
+	exit 2
+}
+trap 'rm -f "$tmp"' EXIT
+trap 'rm -f "$tmp"; exit 2' INT TERM
+
+cat >"$tmp" <<'PY'
+import re
+import sys
+
+MAX_CHARS = 4000
+HEADER = re.compile(r'^Execute plan "(.+)" \((.+)\)\. Goal rows:$')
+LEAD_NUM = re.compile(r"^(\d+)\s*(.*)$")
+ROW_BODY = re.compile(r"^(\S.*?)\s*:(.*)$")
+
+
+def fail_usage(message):
+    sys.stderr.write("goal-block-check: %s\n" % message)
+    raise SystemExit(2)
+
+
+def read_input(argv):
+    if argv and argv[0] != "-":
+        try:
+            with open(argv[0], "rb") as handle:
+                return handle.read()
+        except OSError as err:
+            fail_usage(str(err))
+    return sys.stdin.buffer.read()
+
+
+def extract(lines):
+    """Text between '## Goal block' and the next '## ' heading, else whole input."""
+    for index, line in enumerate(lines):
+        if line.strip() == "## Goal block":
+            end = len(lines)
+            for stop in range(index + 1, len(lines)):
+                if lines[stop].startswith("## "):
+                    end = stop
+                    break
+            return lines[index + 1 : end]
+    return lines
+
+
+def main():
+    args = sys.argv[1:]
+    if len(args) > 1:
+        fail_usage("usage: goal-block-check [FILE]")
+    raw = read_input(args)
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        fail_usage("input is not valid UTF-8")
+
+    lines = extract(text.split("\n"))
+    while lines and lines[0].strip() == "":
+        lines.pop(0)
+    while lines and lines[-1].strip() == "":
+        lines.pop()
+
+    problems = []
+    if not lines:
+        problems.append("missing header line")
+    else:
+        size = len("\n".join(lines))
+        if size > MAX_CHARS:
+            problems.append("too long: %d/%d characters" % (size, MAX_CHARS))
+        if not HEADER.match(lines[0]):
+            problems.append(
+                "missing header line: expected Execute plan \"<plan name>\" "
+                "(<plan file path or reference>). Goal rows:"
+            )
+        expected = 1
+        valid_rows = 0
+        trailer = False
+        for line in lines[1:]:
+            if line.strip() == "":
+                continue
+            lead = LEAD_NUM.match(line)
+            if lead is None:
+                if valid_rows == 0:
+                    problems.append("free text before row 1")
+                trailer = True
+                continue
+            number = int(lead.group(1))
+            if number != expected:
+                problems.append(
+                    "rows not consecutive: expected %d got %d" % (expected, number)
+                )
+            expected = number + 1
+            if trailer:
+                problems.append("row %d: row after trailing free text" % number)
+            body = ROW_BODY.match(lead.group(2))
+            if body is None:
+                problems.append('row %d: expected "<n> <label>: <check>"' % number)
+            elif not body.group(2).strip():
+                problems.append("row %d: missing check after ':'" % number)
+            else:
+                valid_rows += 1
+        if valid_rows == 0:
+            problems.append("no goal rows")
+
+    if problems:
+        for problem in problems:
+            sys.stderr.write(problem + "\n")
+        raise SystemExit(1)
+    raise SystemExit(0)
+
+
+main()
+PY
+
+python3 "$tmp" "$@"
+exit $?

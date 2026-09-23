@@ -6,3 +6,10 @@
 | fork | — | decided forward | — | U1 rerouted Codex → DeepSeek (peer strength, multi-file). U5 review rerouted to Claude agent so reviewer ≠ author lane. |
 | fork | — | decided forward | — | U0a/U0b (Claude agents) and U6 (GLM) share the project dir but write disjoint subdirs (pi/, claude-code/, bin/+spec/). |
 | U6 goal-block spec + validator | GLM | PASS | coordinator ran all six checks: example 0, goal file 0, too-long 1 ("4001/4000"), no-check 1, gap 1, stdin 0 | 374 s, 146k tokens |
+| U0a pi probe | Claude agent (sonnet) | PASS | coordinator: SIGNAL/DISPATCH lines present; pi-run/probe-result.json shows goal-state status "active" after cross-extension /goal | DISPATCH proven on real headless pi + oMLX |
+| lane check | DeepSeek | CLOSED | U1 dispatch | "API Error: 402 Insufficient Balance" |
+| fork | — | decided forward | — | U1 rerouted DeepSeek → Claude agent (sonnet). Both multi-file lanes closed; Claude agent is the plan's fallback. |
+| outage | all remote lanes | BLOCKED | `curl https://api.anthropic.com` → exit 6; `dig @127.0.2.2` empty, `dig @1.1.1.1` resolves | Local DNS resolver 127.0.2.2 (Cloudflare WARP) stopped answering ~03:58Z 2026-09-23. Killed U1 and U0b agents (ENOTFOUND) and U3 GLM run (cli_error after 4770 s). |
+| U3 Codex | GLM | FAIL (partial) | coordinator ran codex/uat.sh: 5 cases FAIL (b–e), f–h PASS; script exits 0 despite failures (defect) | partial files kept for the rerun |
+| U1 pi bridge | Claude agent | INTERRUPTED | — | src/gate.ts, goal-block.ts, signal.ts written; no package.json/tests yet |
+| U0b CC probe | Claude agent | INTERRUPTED | probe.md absent | sandbox evidence kept in claude-code/probe-sandbox/ |

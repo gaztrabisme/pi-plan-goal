@@ -1,0 +1,48 @@
+#!/usr/bin/expect -f
+set timeout 300
+log_file -a /Users/GaryT/Documents/Work/tools/pi-plan-goal/claude-code/probe-sandbox/interactive_reject_raw.log
+cd /Users/GaryT/Documents/Work/tools/pi-plan-goal/claude-code/probe-sandbox
+
+unset ::env(CLAUDE_CODE_CHILD_SESSION)
+unset ::env(CLAUDE_CODE_MESSAGING_SOCKET)
+unset ::env(CLAUDE_CODE_MESSAGING_TOKEN)
+unset ::env(CLAUDE_CODE_SESSION_ID)
+unset ::env(CLAUDE_CODE_SESSION_ATTENDED)
+
+spawn claude --model haiku --permission-mode plan --strict-mcp-config
+
+expect {
+  -re "trust" {
+    sleep 1
+    send "\033\[B"
+    sleep 0.5
+    send "\r"
+    sleep 2
+  }
+  -timeout 6 { }
+}
+
+send "Make a plan to create a file called hello2.txt with the content hello-world-text-2. Once you have a short plan, call the ExitPlanMode tool to present it for approval."
+sleep 2
+send "\r"
+sleep 25
+
+# Approval prompt options: 1 Yes auto-accept / 2 Yes manually / 3 Tell Claude what to change
+# Move down twice to option 3 (reject with feedback) and select it.
+send "\033\[B"
+sleep 0.5
+send "\033\[B"
+sleep 0.5
+send "\r"
+sleep 2
+
+send "No, do not create the file. Cancel this plan."
+sleep 1
+send "\r"
+sleep 15
+
+send "\x03"
+sleep 1
+send "/exit\r"
+sleep 2
+expect eof

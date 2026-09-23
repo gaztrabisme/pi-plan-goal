@@ -1,0 +1,78 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "ExitPlanMode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/GaryT/Documents/Work/tools/pi-plan-goal/claude-code/probe-sandbox/hook.sh PostToolUse"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "ExitPlanMode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/GaryT/Documents/Work/tools/pi-plan-goal/claude-code/probe-sandbox/hook.sh PostToolUseFailure"
+          }
+        ]
+      }
+    ],
+    "PermissionDenied": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/GaryT/Documents/Work/tools/pi-plan-goal/claude-code/probe-sandbox/hook.sh PermissionDenied"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "ExitPlanMode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/GaryT/Documents/Work/tools/pi-plan-goal/claude-code/probe-sandbox/hook.sh PermissionRequest"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "ExitPlanMode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/GaryT/Documents/Work/tools/pi-plan-goal/claude-code/probe-sandbox/hook.sh PreToolUse"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/GaryT/Documents/Work/tools/pi-plan-goal/claude-code/probe-sandbox/hook.sh Notification"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/GaryT/Documents/Work/tools/pi-plan-goal/claude-code/probe-sandbox/stop_hook.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

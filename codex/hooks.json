@@ -1,0 +1,30 @@
+{
+  "description": "plan-goal: when the user approves a plan, make the model write a validated goal block and hand the user a /goal line at Stop.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "__PLAN_GOAL_DIR__/hooks/user-prompt-submit.sh",
+            "statusMessage": "Checking for plan approval",
+            "additionalContextLimit": 4000,
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "__PLAN_GOAL_DIR__/hooks/stop.sh",
+            "statusMessage": "Checking the plan goal",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
