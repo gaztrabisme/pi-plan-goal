@@ -7,5 +7,5 @@
 | U1 pi bridge | done |
 | U2 Claude Code plugin | done |
 | U3 Codex | done |
-| U4 README | running (oMLX) |
+| U4 README | done |
 | U5 review | running (Codex gpt-6-luna) |
