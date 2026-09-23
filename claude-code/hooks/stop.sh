@@ -1,12 +1,58 @@
 #!/bin/sh
 set -u
 
+input_payload=
+input_line=
+while IFS= read -r input_line || [ -n "$input_line" ]; do
+    if [ -n "$input_payload" ]; then
+        input_payload="$input_payload
+$input_line"
+    else
+        input_payload=$input_line
+    fi
+done
+
+input_cwd=
+input_cwd_from_json() {
+    input_rest=${input_payload#*'"cwd"'}
+    [ "$input_rest" != "$input_payload" ] || return 1
+    case "$input_rest" in *:*) input_rest=${input_rest#*:} ;; *) return 1 ;; esac
+    while [ -n "$input_rest" ]; do
+        case "$input_rest" in
+            [[:space:]]*) input_rest=${input_rest#?} ;;
+            *) break ;;
+        esac
+    done
+    case "$input_rest" in
+        \"*) input_rest=${input_rest#\"} ;;
+        *) return 1 ;;
+    esac
+    input_cwd=${input_rest%%\"*}
+    case "$input_cwd" in *'\'*) return 1 ;; esac
+    [ -n "$input_cwd" ]
+}
+
+# Stop is allowed to finish if its Python runtime is missing; otherwise an
+# approved session could become stuck. Stay silent when there is no approval.
+approval_root=${CLAUDE_PROJECT_DIR:-}
+if [ -z "$approval_root" ]; then
+    if input_cwd_from_json; then approval_root=$input_cwd; else approval_root=.; fi
+fi
+state_dir=$approval_root/.claude/plan-goal
+if [ ! -f "$state_dir/approved" ]; then
+    exit 0
+fi
+if ! command -v python3 >/dev/null 2>&1; then
+    printf '%s\n' 'Plan-goal Stop hook: python3 is unavailable; allowing the session to stop.' >&2
+    exit 0
+fi
+
 hook_dir=$(CDPATH= cd -P "$(dirname "$0")" 2>/dev/null && pwd) || exit 0
 plugin_root=$(CDPATH= cd -P "$hook_dir/.." 2>/dev/null && pwd) || exit 0
 checker=${PLAN_GOAL_CHECKER:-${CLAUDE_PLUGIN_ROOT:-$plugin_root}/bin/goal-block-check}
 input_file=$(mktemp "${TMPDIR:-/tmp}/plan-goal-stop.XXXXXX") || exit 0
 trap 'rm -f "$input_file"' EXIT HUP INT TERM
-cat >"$input_file"
+printf '%s\n' "$input_payload" >"$input_file"
 
 python3 - "$checker" "$input_file" <<'PY'
 import json

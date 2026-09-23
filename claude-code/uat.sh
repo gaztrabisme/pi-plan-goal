@@ -46,6 +46,18 @@ json.dump({
 PY
 }
 
+bash_fixture() {
+    python3 - "$1" "$2" "$3" <<'PY'
+import json, sys
+out, cwd, command = sys.argv[1:]
+json.dump({
+    "cwd": cwd, "permission_mode": "acceptEdits",
+    "hook_event_name": "PreToolUse", "tool_name": "Bash",
+    "tool_input": {"command": command}
+}, open(out, "w", encoding="utf-8"))
+PY
+}
+
 stop_fixture() {
     python3 - "$1" "$2" "$3" <<'PY'
 import json, sys
@@ -216,5 +228,98 @@ j="$tmp/j"; mkdir -p "$j"; stub="$j/checker-stub"
 printf '%s\n' '#!/bin/sh' 'exit 0' >"$stub"; chmod +x "$stub"
 if stop_4001_expected "$j" "$stub"; then fail_case "j broken-copy self-test"; else pass_case "j broken-copy self-test"; fi
 
-exit "$failures"
+# k: Bash is gated before a valid goal; allow simple reads and the two narrow
+# plan-goal operations (checker invocation and a literal goal-file here-doc).
+k="$tmp/k"; mkdir -p "$k"; approved "$k"
+printf '%s\n' 'not a goal block' >"$k/.claude/plan-goal/goal.md"
+bash_fixture "$k/redir.json" "$k" 'printf x > edited.txt'
+bash_fixture "$k/read.json" "$k" 'ls -la .'
+bash_fixture "$k/find.json" "$k" 'find . -delete'
+bash_fixture "$k/diff.json" "$k" 'git diff --output=edited.diff'
+bash_fixture "$k/checker.json" "$k" "$checker .claude/plan-goal/goal.md"
+bash_fixture "$k/heredoc.json" "$k" "cat > .claude/plan-goal/goal.md <<'EOF'
+Execute plan \"fixture\" (fixture.md). Goal rows:
+1 check: test -f fixture
+EOF"
+bash_fixture "$k/trailing.json" "$k" "cat > .claude/plan-goal/goal.md <<'EOF'
+fixture
+EOF
+rm -f edited.txt"
+ok=1
+for name in redir find diff trailing; do
+    (cd "$k" && "$pre" <"$k/$name.json" >"$k/$name.out" 2>"$k/$name.err"); rc=$?
+    [ "$rc" -eq 0 ] || ok=0
+    python3 - "$k/$name.out" <<'PY' || ok=0
+import json, sys
+assert json.load(open(sys.argv[1], encoding="utf-8"))["hookSpecificOutput"]["permissionDecision"] == "deny"
+PY
+done
+(cd "$k" && "$pre" <"$k/read.json" >"$k/read.out" 2>"$k/read.err"); read_rc=$?
+(cd "$k" && "$pre" <"$k/checker.json" >"$k/checker.out" 2>"$k/checker.err"); checker_rc=$?
+(cd "$k" && "$pre" <"$k/heredoc.json" >"$k/heredoc.out" 2>"$k/heredoc.err"); heredoc_rc=$?
+if [ "$ok" -eq 1 ] && [ "$read_rc" -eq 0 ] && [ "$checker_rc" -eq 0 ] && [ "$heredoc_rc" -eq 0 ] \
+    && [ ! -s "$k/read.out" ] && [ ! -s "$k/read.err" ] \
+    && [ ! -s "$k/checker.out" ] && [ ! -s "$k/checker.err" ] \
+    && [ ! -s "$k/heredoc.out" ] && [ ! -s "$k/heredoc.err" ]; then
+    pass_case "k Bash read-only and goal-file gate"
+else
+    fail_case "k Bash read-only and goal-file gate"
+fi
 
+# l: without Python, an approved PreToolUse fails closed; an unapproved one
+# stays silent. Stop deliberately fails open with a diagnostic to avoid wedging.
+l="$tmp/l"; mkdir -p "$l/approved" "$l/unapproved" "$l/bin"
+approved "$l/approved"
+pre_fixture "$l/approved/input.json" "$l/approved" "src/new.py"
+pre_fixture "$l/unapproved/input.json" "$l/unapproved" "src/new.py"
+stop_fixture "$l/approved/stop.json" "$l/approved" false
+stop_fixture "$l/unapproved/stop.json" "$l/unapproved" false
+CLAUDE_PROJECT_DIR= PATH="$l/bin" /bin/sh "$pre" <"$l/approved/input.json" >"$l/approved/out" 2>"$l/approved/err"; approved_rc=$?
+CLAUDE_PROJECT_DIR= PATH="$l/bin" /bin/sh "$pre" <"$l/unapproved/input.json" >"$l/unapproved/out" 2>"$l/unapproved/err"; unapproved_rc=$?
+CLAUDE_PROJECT_DIR= PATH="$l/bin" /bin/sh "$stop" <"$l/approved/stop.json" >"$l/approved/stop.out" 2>"$l/approved/stop.err"; stop_rc=$?
+CLAUDE_PROJECT_DIR= PATH="$l/bin" /bin/sh "$stop" <"$l/unapproved/stop.json" >"$l/unapproved/stop.out" 2>"$l/unapproved/stop.err"; stop_unapproved_rc=$?
+if [ "$approved_rc" -eq 2 ] && [ -s "$l/approved/err" ] && [ ! -s "$l/approved/out" ] \
+    && [ "$unapproved_rc" -eq 0 ] && [ ! -s "$l/unapproved/out" ] && [ ! -s "$l/unapproved/err" ] \
+    && [ "$stop_rc" -eq 0 ] && [ -s "$l/approved/stop.err" ] && [ ! -s "$l/approved/stop.out" ] \
+    && [ "$stop_unapproved_rc" -eq 0 ] && [ ! -s "$l/unapproved/stop.err" ] && [ ! -s "$l/unapproved/stop.out" ]; then
+    pass_case "l missing Python behavior"
+else
+    fail_case "l missing Python behavior"
+fi
+
+# m: each new approval archives the prior goal and resets all plan-local state.
+m="$tmp/m"; mkdir -p "$m/.claude/plan-goal"
+cp "$root/spec/example.md" "$m/.claude/plan-goal/goal.md"
+printf '%s\n' 'old active goal' >"$m/.claude/plan-goal/goal.active.md"
+printf '%s\n' 'older archive' >"$m/.claude/plan-goal/goal.prev.md"
+printf '%s\n' '1' >"$m/.claude/plan-goal/blocks"
+printf '%s\n' '7' >"$m/.claude/plan-goal/loop-count"
+printf '%s\n' '1 PASS stale evidence' >"$m/.claude/plan-goal/done"
+post_fixture "$m/input.json" "$m" "$path"
+(cd "$m" && "$post" <input.json >out 2>err); post_rc=$?
+post_state_ok=0
+if [ "$post_rc" -eq 0 ] && python3 - "$m/.claude/plan-goal" <<'PY'
+import os, sys
+state = sys.argv[1]
+assert os.path.isfile(os.path.join(state, "approved"))
+assert not os.path.exists(os.path.join(state, "goal.md"))
+assert not os.path.exists(os.path.join(state, "goal.active.md"))
+assert open(os.path.join(state, "goal.prev.md"), encoding="utf-8").read().startswith("Execute plan ")
+assert not any(os.path.exists(os.path.join(state, name)) for name in ("blocks", "loop-count", "done"))
+PY
+then post_state_ok=1; fi
+pre_fixture "$m/src.json" "$m" "src/new.py"
+(cd "$m" && "$pre" <src.json >src.out 2>src.err); deny_rc=$?
+cp "$root/spec/example.md" "$m/.claude/plan-goal/goal.md"
+(cd "$m" && "$pre" <src.json >src-after.out 2>src-after.err); allow_rc=$?
+if [ "$post_state_ok" -eq 1 ] && [ "$deny_rc" -eq 0 ] && [ "$allow_rc" -eq 0 ] \
+    && python3 - "$m/.claude/plan-goal" "$m/src.out" "$m/src-after.out" <<'PY'
+import json, os, sys
+state, denied, allowed = sys.argv[1:]
+assert os.path.isfile(os.path.join(state, "goal.md"))
+assert json.load(open(denied, encoding="utf-8"))["hookSpecificOutput"]["permissionDecision"] == "deny"
+assert not open(allowed, encoding="utf-8").read().strip()
+PY
+then pass_case "m new approval clears stale goal"; else fail_case "m new approval clears stale goal"; fi
+
+exit "$failures"

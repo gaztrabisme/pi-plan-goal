@@ -67,20 +67,23 @@ def atomic_write(path, text):
             pass
 
 
+# Archive any prior goal before arming the new approval. If both goal files
+# exist, goal.md wins the single archive slot; the older archive is replaced.
+previous_goal = os.path.join(state_dir, "goal.prev.md")
+for name in ("goal.active.md", "goal.md"):
+    path = os.path.join(state_dir, name)
+    if os.path.exists(path):
+        os.replace(path, previous_goal)
+for name in ("blocks", "loop-count", "done"):
+    try:
+        os.unlink(os.path.join(state_dir, name))
+    except FileNotFoundError:
+        pass
+
 atomic_write(
     os.path.join(state_dir, "approved"),
     json.dumps({"filePath": file_path, "title": title}, ensure_ascii=False) + "\n",
 )
-for name in ("blocks", "loop-count"):
-    try:
-        os.unlink(os.path.join(state_dir, name))
-    except FileNotFoundError:
-        pass
-for name in ("goal.active.md", "done"):
-    try:
-        os.unlink(os.path.join(state_dir, name))
-    except FileNotFoundError:
-        pass
 
 first_line = 'Execute plan "%s" (%s). Goal rows:' % (title, file_path)
 context = (
